@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#faf8f4">
+    <title>旅页 · 旅行共享相簿</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="apple.css">
+  </head>
+  <body>
+    <main id="app"></main>
+    <input id="file-picker" type="file" accept="image/*,video/*" multiple hidden>
+    <script>
+      window.__LVYUE_CLOUDBASE_ENV_ID__ = '%VITE_CLOUDBASE_ENV_ID%';
+      window.__LVYUE_CLOUDBASE_REGION__ = '%VITE_CLOUDBASE_REGION%';
+      window.__LVYUE_CLOUDBASE_ACCESS_KEY__ = '%VITE_CLOUDBASE_ACCESS_KEY%';
+    </script>
+    <script src="cloudbase-config.js"></script>
+    <script src="https://static.cloudbase.net/cloudbase-js-sdk/3.0.1/cloudbase.full.js"></script>
+    <script src="cloudbase-api.js"></script>
+    <script src="app.js"></script>
+    <script src="cloud-enhancements.js"></script>
+  </body>
+</html>

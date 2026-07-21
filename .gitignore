@@ -1,0 +1,34 @@
+# Local environment files and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*service-account*.json
+
+# Vercel and package-manager output
+.vercel/
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local development data and uploaded originals
+data/
+uploads/
+__pycache__/
+*.py[cod]
+
+# Previous local/Supabase prototype (kept locally, not part of production)
+server.py
+supabase-api.js
+supabase-config.js
+supabase/
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
