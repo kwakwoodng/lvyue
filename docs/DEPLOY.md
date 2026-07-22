@@ -42,19 +42,19 @@ APP_JWT_SECRET=至少32字节的随机字符串
 APP_JWT_TTL=7d
 BCRYPT_COST=12
 TCB_ENV_ID=lvyue-d6gyatb4a502c0235
-TCB_STORAGE_REGION=ap-shanghai
-COS_BUCKET=完整Bucket名称（带APPID后缀）
+TCB_STORAGE_BUCKET=lvyue-media
+TCB_API_KEY=在 CloudBase API Key 页面创建的服务端密钥
 CORS_ORIGINS=https://你的项目.vercel.app,https://你的自定义域名
 ```
 
-腾讯云运行时临时凭证优先从 `TENCENTCLOUD_SECRETID`、`TENCENTCLOUD_SECRETKEY`、`TENCENTCLOUD_SESSIONTOKEN` 读取；不要手工把永久密钥提交到代码。函数角色需要读写该私有存储桶。
+`TCB_API_KEY` 只放在云函数环境变量中，不要提交到 GitHub，也不要放进 Vercel 前端变量。
 
 ## 4. 存储桶跨域
 
-浏览器通过短期签名 URL 直接 `PUT` 原图/视频，因此 Bucket 的 CORS 需要允许 Vercel 正式域名和自定义域名：
+浏览器通过短期上传令牌直传原图/视频，因此 Bucket 的 CORS 需要允许 Vercel 正式域名和自定义域名：
 
 - Allowed Origin：正式 `https://*.vercel.app` 域名的精确值及自定义域名
-- Allowed Methods：`GET`、`HEAD`、`PUT`
+- Allowed Methods：`GET`、`HEAD`、`PUT`、`POST`
 - Allowed Headers：`content-type`、`authorization`、`x-cos-*`
 - Expose Headers：`ETag`
 
@@ -76,4 +76,3 @@ CORS_ORIGINS=https://你的项目.vercel.app,https://你的自定义域名
 ## 6. 上线验收
 
 依次测试两个新账号：注册 → 错误密码提示 → 添加好友 → 同意好友 → 创建相簿 → 邀请成员 → 上传头像/照片/视频 → 刷新后仍存在 → 点赞/评论/回复 → 消息中心收到记录 → 下载原图。
-

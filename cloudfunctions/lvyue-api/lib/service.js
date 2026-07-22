@@ -458,8 +458,17 @@ async function prepareUpload(user, data) {
      values($1,$2,$3,$4,$5,$6,$7,now()+interval '15 minutes') returning id,object_key,expires_at`,
     [user.id, albumId, purpose, objectKey, mimeType, size, text(data.original_name || '未命名文件', 255, '文件名')]
   )).rows[0];
-  const uploadUrl = await storage.signedUrl('PUT', objectKey, 900, { 'Content-Type': mimeType });
-  return { upload_intent_id: intent.id, object_key: objectKey, upload_url: uploadUrl, method: 'PUT', headers: { 'Content-Type': mimeType }, expires_at: intent.expires_at };
+  const upload = await storage.createSignedUpload(objectKey);
+  return {
+    upload_intent_id: intent.id,
+    object_key: objectKey,
+    bucket_id: upload.bucketId,
+    upload_url: upload.url,
+    upload_token: upload.token,
+    method: 'PUT',
+    headers: { 'Content-Type': mimeType },
+    expires_at: intent.expires_at
+  };
 }
 
 async function completeUpload(user, data) {

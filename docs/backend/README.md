@@ -38,7 +38,7 @@
 
 ## 环境变量安全
 
-必须配置：`PGHOST`、`PGPORT`、`PGDATABASE`、`PGUSER`、`PGPASSWORD`、`APP_JWT_SECRET`、`TCB_STORAGE_BUCKET`、`TCB_STORAGE_REGION`、`CORS_ORIGINS`。
+必须配置：`PGHOST`、`PGPORT`、`PGDATABASE`、`PGUSER`、`PGPASSWORD`、`APP_JWT_SECRET`、`TCB_ENV_ID`、`TCB_STORAGE_BUCKET`、`TCB_API_KEY`、`CORS_ORIGINS`。
 
 `APP_JWT_SECRET` 至少 32 个随机字节。变更它会使所有用户重新登录。用户主动“退出所有设备”会增加 `token_version`，立即让该用户旧令牌失效。
 
@@ -49,7 +49,7 @@
 大文件不经过云函数正文，避免云函数请求大小与执行时间限制：
 
 1. 调 `storage.prepareUpload`，服务器验证相簿成员身份、MIME 与文件大小，并创建 15 分钟 upload intent。
-2. 浏览器以返回的 `PUT`、headers 和签名 URL 直传私有 COS Bucket。
+2. 浏览器使用返回的一次性上传令牌直传 CloudBase 私有存储桶。
 3. 调 `storage.completeUpload`。服务器验证 intent、对象存在性和分类归属，再写 PostgreSQL。
 4. 查看/下载时调 `media.url` 获取短期签名 URL。
 

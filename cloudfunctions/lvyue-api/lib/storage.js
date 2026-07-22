@@ -1,30 +1,34 @@
 'use strict';
 
-const COS = require('cos-nodejs-sdk-v5');
 const crypto = require('crypto');
-const path = require('path');
+const CloudBaseModule = require('@cloudbase/manager-node');
 const { assert } = require('./errors');
+
+const CloudBase = CloudBaseModule.default || CloudBaseModule;
+let manager;
 
 function storageConfig() {
   const config = {
-    Bucket: process.env.COS_BUCKET || process.env.TCB_STORAGE_BUCKET,
-    Region: process.env.TCB_STORAGE_REGION || 'ap-shanghai',
-    SecretId: process.env.TENCENTCLOUD_SECRETID || process.env.TENCENT_SECRET_ID,
-    SecretKey: process.env.TENCENTCLOUD_SECRETKEY || process.env.TENCENT_SECRET_KEY,
-    SecurityToken: process.env.TENCENTCLOUD_SESSIONTOKEN || process.env.TENCENT_SESSION_TOKEN
+    bucketId: process.env.TCB_STORAGE_BUCKET || 'lvyue-media',
+    envId: process.env.TCB_ENV_ID || process.env.TCB_ENV,
+    apiKey: process.env.TCB_API_KEY,
+    secretId: process.env.TENCENTCLOUD_SECRETID || process.env.TENCENT_SECRET_ID,
+    secretKey: process.env.TENCENTCLOUD_SECRETKEY || process.env.TENCENT_SECRET_KEY,
+    token: process.env.TENCENTCLOUD_SESSIONTOKEN || process.env.TENCENT_SESSION_TOKEN
   };
-  assert(config.Bucket && config.SecretId && config.SecretKey, 500, 'STORAGE_CONFIG_ERROR', '云存储环境变量未正确配置');
-  assert(
-    /^[a-z0-9][a-z0-9-]*-\d{5,}$/.test(config.Bucket),
-    500,
-    'STORAGE_BUCKET_INVALID',
-    'COS_BUCKET 必须填写带 APPID 后缀的完整存储桶名称，例如 lvyue-media-1234567890'
-  );
+  assert(config.bucketId && config.envId && config.apiKey, 500, 'STORAGE_CONFIG_ERROR', '云存储环境变量未正确配置');
   return config;
 }
 
-function cosClient(config) {
-  return new COS({ SecretId: config.SecretId, SecretKey: config.SecretKey, SecurityToken: config.SecurityToken });
+function storageManager(config) {
+  if (!manager) {
+    const options = { envId: config.envId };
+    if (config.secretId) options.secretId = config.secretId;
+    if (config.secretKey) options.secretKey = config.secretKey;
+    if (config.token) options.token = config.token;
+    manager = new CloudBase(options);
+  }
+  return manager.storage;
 }
 
 function safeExtension(name, mimeType) {
@@ -34,8 +38,7 @@ function safeExtension(name, mimeType) {
   };
   const ext = allowed[mimeType];
   assert(ext, 400, 'UNSUPPORTED_MEDIA_TYPE', '不支持该文件格式');
-  const supplied = path.extname(String(name || '')).toLowerCase();
-  return supplied && supplied.length <= 6 ? ext : ext;
+  return ext;
 }
 
 function mediaKind(mimeType) {
@@ -44,52 +47,75 @@ function mediaKind(mimeType) {
 
 function assertFileSize(mimeType, size, purpose) {
   const bytes = Number(size || 0);
-  const max = purpose === 'avatar' ? 5 * 1024 * 1024 : mediaKind(mimeType) === 'video' ? 500 * 1024 * 1024 : 50 * 1024 * 1024;
-  assert(Number.isSafeInteger(bytes) && bytes > 0 && bytes <= max, 400, 'INVALID_FILE_SIZE', `文件大小必须在 1 字节到 ${Math.round(max/1024/1024)}MB 之间`);
+  const max = purpose === 'avatar'
+    ? 5 * 1024 * 1024
+    : mediaKind(mimeType) === 'video'
+      ? 500 * 1024 * 1024
+      : 50 * 1024 * 1024;
+  assert(Number.isSafeInteger(bytes) && bytes > 0 && bytes <= max, 400, 'INVALID_FILE_SIZE', `文件大小必须在 1 字节到 ${Math.round(max / 1024 / 1024)}MB 之间`);
 }
 
 function createObjectKey({ purpose, userId, albumId, originalName, mimeType }) {
   const ext = safeExtension(originalName, mimeType);
-  const id = crypto.randomUUID();
-  if (purpose === 'avatar') return `avatars/${userId}/${id}${ext}`;
-  if (purpose === 'cover') return `albums/${albumId}/covers/${id}${ext}`;
-  return `albums/${albumId}/media/${userId}/${id}${ext}`;
+  const objectId = crypto.randomUUID();
+  if (purpose === 'avatar') return `avatars/${userId}/${objectId}${ext}`;
+  if (purpose === 'cover') return `albums/${albumId}/covers/${objectId}${ext}`;
+  return `albums/${albumId}/media/${userId}/${objectId}${ext}`;
 }
 
-function signedUrl(method, key, expiresSeconds, headers) {
+async function createSignedUpload(objectName) {
   const config = storageConfig();
-  const cos = cosClient(config);
-  return new Promise((resolve, reject) => {
-    cos.getObjectUrl({
-      Bucket: config.Bucket,
-      Region: config.Region,
-      Key: key,
-      Method: method,
-      Expires: Number(expiresSeconds || 600),
-      Headers: headers || {},
-      Sign: true
-    }, (error, data) => error ? reject(error) : resolve(data.Url));
+  const result = await storageManager(config).signUploadObject({
+    bucketId: config.bucketId,
+    objectName,
+    upsert: false,
+    accessToken: config.apiKey,
+    envId: config.envId
+  });
+  return { bucketId: config.bucketId, url: result.url, token: result.token };
+}
+
+async function signedUrl(method, objectName, expiresSeconds) {
+  assert(String(method || 'GET').toUpperCase() === 'GET', 500, 'STORAGE_METHOD_ERROR', '仅支持生成下载链接');
+  const config = storageConfig();
+  const result = await storageManager(config).signObject({
+    bucketId: config.bucketId,
+    objectName,
+    expiresIn: Number(expiresSeconds || 600),
+    accessToken: config.apiKey,
+    envId: config.envId
+  });
+  return result.signedURL;
+}
+
+async function objectExists(objectName) {
+  const config = storageConfig();
+  const result = await storageManager(config).listObjects({
+    bucketId: config.bucketId,
+    prefix: objectName,
+    limit: 10,
+    accessToken: config.apiKey,
+    envId: config.envId
+  });
+  return Array.isArray(result.objects) && result.objects.some(item => item.name === objectName);
+}
+
+async function deleteObject(objectName) {
+  const config = storageConfig();
+  return storageManager(config).deleteObject({
+    bucketId: config.bucketId,
+    objectName,
+    accessToken: config.apiKey,
+    envId: config.envId
   });
 }
 
-async function objectExists(key) {
-  const config = storageConfig();
-  const cos = cosClient(config);
-  return new Promise((resolve, reject) => {
-    cos.headObject({ Bucket: config.Bucket, Region: config.Region, Key: key }, (error, data) => {
-      if (error && (error.statusCode === 404 || error.code === 'NoSuchKey')) return resolve(false);
-      if (error) return reject(error);
-      resolve(Boolean(data));
-    });
-  });
-}
-
-async function deleteObject(key) {
-  const config = storageConfig();
-  const cos = cosClient(config);
-  return new Promise((resolve, reject) => {
-    cos.deleteObject({ Bucket: config.Bucket, Region: config.Region, Key: key }, (error, data) => error ? reject(error) : resolve(data));
-  });
-}
-
-module.exports = { mediaKind, assertFileSize, createObjectKey, signedUrl, objectExists, deleteObject };
+module.exports = {
+  mediaKind,
+  assertFileSize,
+  createObjectKey,
+  createSignedUpload,
+  signedUrl,
+  objectExists,
+  deleteObject
+};

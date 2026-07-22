@@ -71,8 +71,9 @@
       mime_type: file.type || 'application/octet-stream',
       byte_size: file.size
     });
-    var put = await fetch(prepared.upload_url, { method: prepared.method || 'PUT', headers: prepared.headers || { 'Content-Type': file.type }, body: file });
-    if (!put.ok) throw new Error('文件上传失败（' + put.status + '）');
+    var bucket = app.storage.from(prepared.bucket_id || 'lvyue-media');
+    var upload = await bucket.uploadToSignedUrl(prepared.object_key, prepared.upload_token, file);
+    if (upload && upload.error) throw apiError(upload.error);
     return call('storage.completeUpload', {
       upload_intent_id: prepared.upload_intent_id,
       object_key: prepared.object_key,

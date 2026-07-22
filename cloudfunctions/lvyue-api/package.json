@@ -5,8 +5,8 @@
   "main": "index.js",
   "engines": { "node": ">=18" },
   "dependencies": {
+    "@cloudbase/manager-node": "^5.4.0",
     "bcryptjs": "^3.0.2",
-    "cos-nodejs-sdk-v5": "^2.15.4",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3"
   }
