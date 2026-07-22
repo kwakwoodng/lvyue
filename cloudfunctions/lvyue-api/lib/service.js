@@ -70,8 +70,8 @@ async function register(event, data) {
   const passwordHash = await auth.hashPassword(password);
   try {
     const result = await query(
-      `insert into app_users(travel_id,nickname,password_hash) values($1,$1,$2)
-       returning id,travel_id,nickname,avatar_path,token_version,created_at`, [travelId, passwordHash]
+      `insert into app_users(travel_id,nickname,password_hash) values($1,$2,$3)
+       returning id,travel_id,nickname,avatar_path,token_version,created_at`, [travelId, travelId, passwordHash]
     );
     await auth.recordLoginAttempt(attemptKey, true);
     return { token: auth.issueToken(result.rows[0]), user: publicUser(result.rows[0]) };
