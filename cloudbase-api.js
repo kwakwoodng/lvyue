@@ -7,10 +7,12 @@
   var onlinePage = location.protocol === 'http:' || location.protocol === 'https:';
   var sdk = window.cloudbase || window.tcb;
   var app = null;
+  var initError = null;
   var storageKey = 'lvyue-cloudbase-session';
 
   if (sdk && validKey && onlinePage) {
-    try { app = sdk.init({ env: config.env, region: config.region || 'ap-shanghai', accessKey: key, timeout: 20000 }); } catch (error) { app = null; }
+    try { app = sdk.init({ env: config.env, region: config.region || 'ap-shanghai', accessKey: key, timeout: 20000 }); }
+    catch (error) { initError = error; app = null; }
   }
 
   function storedSession() {
@@ -145,6 +147,7 @@
 
   window.LvyueCloud = {
     configured: Boolean(app),
+    initError: initError ? String(initError.message || initError) : '',
     provider: 'cloudbase',
     call: call,
     session: storedSession,

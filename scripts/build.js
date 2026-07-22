@@ -9,6 +9,7 @@ const publicFiles = [
   'index.html',
   'styles.css',
   'apple.css',
+  'cloudbase-sdk.js',
   'cloudbase-config.js',
   'cloudbase-api.js',
   'cloud-enhancements.js',
