@@ -19,6 +19,7 @@ function storageRemove(key) {
 }
 var accounts = JSON.parse(storageGet('lvyue-accounts') || '{}');
 var currentLoginId = String(storageGet('lvyue-login') || '').toLowerCase();
+var onlinePage = location.protocol === 'http:' || location.protocol === 'https:';
 var cloudMode = Boolean(window.LvyueCloud && window.LvyueCloud.configured);
 var cloudUserId = '';
 var cloudProfiles = {};
@@ -64,6 +65,23 @@ state.notifications=state.notifications||[];
 state.albumInvites=state.albumInvites||[];
 state.albumReviews=state.albumReviews||[];
 var demoStateTemplate=JSON.parse(JSON.stringify(state));
+function emptyAccountState(identifier){
+  var username=String(identifier||'');
+  return {
+    user:{username:username,id:username,nickname:username,avatar:username.slice(0,1).toUpperCase(),avatarUrl:''},
+    folder:'全部相簿',
+    folders:['全部相簿'],
+    people:['全部'],
+    albums:[],
+    friends:[],
+    friendRequests:[],
+    notifications:[],
+    albumInvites:[],
+    albumReviews:[]
+  };
+}
+// 示例相簿只用于直接打开本地文件时的作品预览。线上数据必须完全来自云端。
+if(onlinePage){state=emptyAccountState('');media=[];currentLoginId='';}
 var app = document.getElementById('app');
 var page = cloudMode?'login':currentLoginId&&accounts[currentLoginId]?'albums':'login';
 var activeAlbum = 'tokyo';
@@ -82,9 +100,9 @@ var selectedFiles = [];
 var activeDragCancel = null;
 var picker = document.getElementById('file-picker');
 
-function save(){if(cloudMode)return;if(currentLoginId&&accounts[currentLoginId])storageSet('lvyue-user-'+currentLoginId,JSON.stringify(state));else storageSet('lvyue-demo',JSON.stringify(state));}
+function save(){if(onlinePage||cloudMode)return;if(currentLoginId&&accounts[currentLoginId])storageSet('lvyue-user-'+currentLoginId,JSON.stringify(state));else storageSet('lvyue-demo',JSON.stringify(state));}
 function passwordFingerprint(value){var hash=2166136261;for(var i=0;i<value.length;i++){hash^=value.charCodeAt(i);hash=Math.imul(hash,16777619);}return (hash>>>0).toString(16);}
-function freshAccountState(username){var next=JSON.parse(JSON.stringify(demoStateTemplate));next.user={username:username,id:username,nickname:username,avatar:username.slice(0,1).toUpperCase(),avatarUrl:''};next.folder='全部相簿';next.friendRequests=[];next.notifications=[];next.albumInvites=[];return next;}
+function freshAccountState(username){return emptyAccountState(username);}
 function freshCloudState(profile){return {user:{username:profile.travel_id,id:profile.travel_id,nickname:profile.nickname||profile.travel_id,avatar:(profile.nickname||profile.travel_id).slice(0,1).toUpperCase(),avatarUrl:''},folder:'全部相簿',folders:['全部相簿'],albums:[],friends:[],friendRequests:[],notifications:[],albumInvites:[]};}
 function cloudProfileView(profile){if(!profile)return null;return {userId:profile.user_id,id:String(profile.travel_id),username:String(profile.travel_id),nickname:profile.nickname||String(profile.travel_id),avatar:(profile.nickname||String(profile.travel_id)).slice(0,1).toUpperCase(),avatarPath:profile.avatar_path||'',avatarUrl:profile.avatar_url||''};}
 function rememberCloudProfiles(rows){(rows||[]).forEach(function(row){var view=cloudProfileView(row);cloudProfiles[String(row.user_id).toLowerCase()]=view;cloudProfiles[String(row.travel_id).toLowerCase()]=view;});}
@@ -149,7 +167,8 @@ function albumsView(){
   var list=state.folder==='全部相簿'?state.albums:state.albums.filter(function(a){return a.folder===state.folder;});
   var cards=list.map(albumCard).join('');
   var folders=state.folders.map(function(f){return '<button class="folder '+(f===state.folder?'active':'')+'" onclick="setFolder(\''+esc(f)+'\')">'+(f==='全部相簿'?'▦':'⌁')+' '+esc(f)+'</button>';}).join('');
-  return shell('<div class="page">'+headerBar(false)+'<div class="eyebrow">PRIVATE TRAVEL ARCHIVE</div><h1>把共同经历的<br>每一页都留住。</h1><p class="subcopy">和同行的人一起保存照片、视频与当时的心情。</p><section class="hero"><div class="hero-content"><div class="eyebrow">这一年，我们走过</div><div class="hero-stats"><div class="hero-stat"><b>'+state.albums.length+'</b><span>本旅行相簿</span></div><div class="hero-stat"><b>78</b><span>份共同记忆</span></div><div class="hero-stat"><b>'+state.friends.length+'</b><span>位同行的人</span></div></div></div></section><div class="section-head"><h2>我的相簿</h2><button class="text-action" onclick="openPopup(\'folder\')">整理分类</button></div><div class="folder-row">'+folders+'</div><div class="album-list">'+cards+'<button class="empty-add" onclick="openPopup(\'album\')"><b>＋</b><span>新建一本相簿</span></button></div></div>');
+  var memoryCount=state.albums.reduce(function(total,item){return total+Number(item.count||0);},0);
+  return shell('<div class="page">'+headerBar(false)+'<div class="eyebrow">PRIVATE TRAVEL ARCHIVE</div><h1>把共同经历的<br>每一页都留住。</h1><p class="subcopy">和同行的人一起保存照片、视频与当时的心情。</p><section class="hero"><div class="hero-content"><div class="eyebrow">这一年，我们走过</div><div class="hero-stats"><div class="hero-stat"><b>'+state.albums.length+'</b><span>本旅行相簿</span></div><div class="hero-stat"><b>'+memoryCount+'</b><span>份共同记忆</span></div><div class="hero-stat"><b>'+state.friends.length+'</b><span>位同行的人</span></div></div></div></section><div class="section-head"><h2>我的相簿</h2><button class="text-action" onclick="openPopup(\'folder\')">整理分类</button></div><div class="folder-row">'+folders+'</div><div class="album-list">'+cards+'<button class="empty-add" onclick="openPopup(\'album\')"><b>＋</b><span>新建一本相簿</span></button></div></div>');
 }
 function albumCard(a){
   var members=(a.members||[]).map(function(m,i){return albumMemberAv(a,i);}).join('');
@@ -299,6 +318,7 @@ async function login(event){
     }
     return;
   }
+  if(onlinePage)return notify('云端服务加载失败，请刷新页面后重试');
   if(accounts[accountId]){
     if(accounts[accountId].password!==fingerprint)return notify('密码错误，无法登录');
     var savedState=storageGet('lvyue-user-'+accountId);
