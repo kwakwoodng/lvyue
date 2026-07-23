@@ -30,16 +30,24 @@
   }
   async function callHttp(action, data, options) {
     var current = storedSession();
-    var response = await fetch(config.httpEndpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      credentials: 'omit',
-      body: JSON.stringify({
-        action: action,
-        data: data || {},
-        token: options && options.public ? undefined : current && current.token
-      })
-    });
+    var response;
+    try {
+      response = await fetch(config.httpEndpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          action: action,
+          data: data || {},
+          token: options && options.public ? undefined : current && current.token
+        })
+      });
+    } catch (cause) {
+      var transportError = new Error('云端连接失败，请刷新页面后重试');
+      transportError.code = 'NETWORK_ERROR';
+      transportError.cause = cause;
+      throw transportError;
+    }
     var text = await response.text();
     var result;
     try { result = text ? JSON.parse(text) : null; }
