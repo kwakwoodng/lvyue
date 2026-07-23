@@ -3,8 +3,7 @@
 const { dispatch } = require('./lib/service');
 const { ApiError } = require('./lib/errors');
 
-const allowedOrigins = String(process.env.CORS_ORIGINS || 'https://lvyue.vercel.app')
-  .split(',').map(item => item.trim()).filter(Boolean);
+const productionOrigin = 'https://lvyue.vercel.app';
 
 function requestMethod(event) {
   return String(
@@ -21,12 +20,12 @@ function normalizeEvent(event) {
 }
 
 function corsHeaders(event) {
-  const headers = event.headers || {};
-  const origin = headers.origin || headers.Origin || '';
-  const allowed = allowedOrigins.includes(origin) ? origin : (allowedOrigins[0] || '');
   return {
     'content-type': 'application/json; charset=utf-8',
-    'access-control-allow-origin': allowed,
+    // This function is called by the browser through the CloudBase HTTP
+    // gateway. Keep the production origin explicit so an empty/missing Origin
+    // value in the gateway event can never produce an invalid CORS response.
+    'access-control-allow-origin': productionOrigin,
     'access-control-allow-methods': 'POST,OPTIONS',
     'access-control-allow-headers': 'content-type,authorization',
     'access-control-max-age': '86400',
