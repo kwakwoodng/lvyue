@@ -4,6 +4,12 @@
   "outputDirectory": "dist",
   "cleanUrls": true,
   "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/api/lvyue",
+      "destination": "https://lvyue-d6gyatb4a502c0235-1329666616.ap-shanghai.app.tcloudbase.com/lvyue-api"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

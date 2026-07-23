@@ -3,7 +3,22 @@
 const { dispatch } = require('./lib/service');
 const { ApiError } = require('./lib/errors');
 
-const allowedOrigins = String(process.env.CORS_ORIGINS || '').split(',').map(item => item.trim()).filter(Boolean);
+const allowedOrigins = String(process.env.CORS_ORIGINS || 'https://lvyue.vercel.app')
+  .split(',').map(item => item.trim()).filter(Boolean);
+
+function requestMethod(event) {
+  return String(
+    event && (
+      event.httpMethod ||
+      event.requestContext && event.requestContext.http && event.requestContext.http.method
+    ) || ''
+  ).toUpperCase();
+}
+
+function normalizeEvent(event) {
+  if (!event || !event.isBase64Encoded || typeof event.body !== 'string') return event || {};
+  return { ...event, body: Buffer.from(event.body, 'base64').toString('utf8'), isBase64Encoded: false };
+}
 
 function corsHeaders(event) {
   const headers = event.headers || {};
@@ -20,11 +35,12 @@ function corsHeaders(event) {
 }
 
 exports.main = async event => {
-  const isHttp = Boolean(event && (event.httpMethod || event.headers));
-  const headers = corsHeaders(event || {});
-  if (event && event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' };
+  const normalized = normalizeEvent(event);
+  const isHttp = Boolean(normalized && (requestMethod(normalized) || normalized.headers));
+  const headers = corsHeaders(normalized);
+  if (requestMethod(normalized) === 'OPTIONS') return { statusCode: 204, headers, body: '' };
   try {
-    const data = await dispatch(event || {});
+    const data = await dispatch(normalized);
     const payload = { ok: true, data };
     return isHttp ? { statusCode: 200, headers, body: JSON.stringify(payload) } : payload;
   } catch (error) {

@@ -28,7 +28,31 @@
     error.details = detail.details;
     return error;
   }
+  async function callHttp(action, data, options) {
+    var current = storedSession();
+    var response = await fetch(config.httpEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      credentials: 'omit',
+      body: JSON.stringify({
+        action: action,
+        data: data || {},
+        token: options && options.public ? undefined : current && current.token
+      })
+    });
+    var text = await response.text();
+    var result;
+    try { result = text ? JSON.parse(text) : null; }
+    catch (error) {
+      var invalidResponse = new Error('云端返回内容格式错误');
+      invalidResponse.code = 'INVALID_CLOUD_RESPONSE';
+      throw invalidResponse;
+    }
+    if (!response.ok || !result || result.ok !== true) throw apiError(result);
+    return result.data;
+  }
   async function call(action, data, options) {
+    if (config.httpEndpoint) return callHttp(action, data, options);
     if (!app) throw new Error(validKey ? 'CloudBase Web SDK 加载失败' : '尚未配置 CloudBase Publishable Key');
     var current = storedSession();
     var response = await app.callFunction({
@@ -146,9 +170,9 @@
   }
 
   window.LvyueCloud = {
-    configured: Boolean(app),
+    configured: Boolean(config.httpEndpoint || app),
     initError: initError ? String(initError.message || initError) : '',
-    provider: 'cloudbase',
+    provider: config.httpEndpoint ? 'cloudbase-http' : 'cloudbase',
     call: call,
     session: storedSession,
     loginOrRegister: loginOrRegister,

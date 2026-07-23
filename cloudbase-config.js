@@ -10,6 +10,7 @@
     env: runtimeValue(window.__LVYUE_CLOUDBASE_ENV_ID__) || 'lvyue-d6gyatb4a502c0235',
     region: runtimeValue(window.__LVYUE_CLOUDBASE_REGION__) || 'ap-shanghai',
     functionName: 'lvyue-api',
+    httpEndpoint: '/api/lvyue',
     // 部署时由构建环境注入 Publishable Key；不要在这里放 SecretId/SecretKey。
     accessKey: runtimeKey || 'VITE_CLOUDBASE_ACCESS_KEY'
   });
