@@ -228,50 +228,66 @@ function detailView(){
   var mediaTrack=items.length>1?'<div class="viewer-track" data-multiple="1">'+slide(items[(index-1+items.length)%items.length],false)+slide(m,true)+slide(items[(index+1)%items.length],false)+'</div>':'<div class="viewer-track single" data-multiple="0">'+slide(m,true)+'</div>';
   return '<section class="viewer-layer"><header class="viewer-top"><button class="viewer-close" onclick="closeDetail()">×</button><span>'+(index+1)+' / '+items.length+'</span><span class="viewer-spacer"></span></header><div class="viewer-stage">'+mediaTrack+'</div><div class="viewer-panel"><div class="viewer-info"><div><b>'+esc(m.by)+' 上传</b><span>'+esc(m.date)+' · '+esc(m.people.join('、'))+'</span></div></div><div class="detail-actions"><button class="'+(m.liked?'liked':'')+'" onclick="like(\''+m.id+'\')">'+(m.liked?'♥ 已赞':'♡ 点赞')+' '+m.likes+'</button><button onclick="downloadOriginal(\''+m.id+'\')">⇩ 下载原图</button></div><div class="viewer-comments"><h3 class="comments-title">评论 '+m.comments.length+'</h3>'+(comments||'<p class="subcopy">还没有评论，留下当时的心情吧。</p>')+'<form class="comment-add" onsubmit="comment(event,\''+m.id+'\')"><input name="comment" placeholder="写下你的评论…" required maxlength="80"><button>发送</button></form></div></div></section>';
 }
+function interactionArguments(command,event){
+  var match=String(command||'').match(/\((.*)\)/);
+  if(!match)return [];
+  var args=[];
+  var token=/'([^']*)'|"([^"]*)"|\b(true|false|null|event)\b|(-?\d+(?:\.\d+)?)/g;
+  var item;
+  while((item=token.exec(match[1]))){
+    if(item[1]!==undefined)args.push(item[1]);
+    else if(item[2]!==undefined)args.push(item[2]);
+    else if(item[3]==='true')args.push(true);
+    else if(item[3]==='false')args.push(false);
+    else if(item[3]==='null')args.push(null);
+    else if(item[3]==='event')args.push(event);
+    else args.push(Number(item[4]));
+  }
+  return args;
+}
+var interactionHandlers=[
+  'go','openAlbum','setFolder','setPerson','openPopup','openDetail','openFriendCard',
+  'sendFriendRequest','approveFriendRequest','rejectFriendRequest','approveAlbumInvite',
+  'rejectAlbumInvite','deleteFolder','deleteCategory','selectCover','toggleCoverMenu',
+  'showCoverLibrary','prevMedia','nextMedia','like','downloadOriginal','openReply',
+  'invite','notify','closePopup','closeDetail','copyId','logout','approve','login',
+  'createFolder','renameFolder','createAlbum','addFriend','addPerson','renameCategory',
+  'updateProfile','saveFriendCard','updateAlbum','upload','comment','replyComment',
+  'reviewAlbumMember'
+];
+function interactionAllowed(name){return interactionHandlers.indexOf(name)!==-1;}
+function interactionHandler(name){
+  return typeof window[name]==='function'?window[name]:null;
+}
+function bindCommand(element,attribute,eventName){
+  var command=element.getAttribute(attribute)||'';
+  if(command.indexOf('if(event.target===this)closePopup()')===0){
+    element.removeAttribute(attribute);
+    element.addEventListener(eventName,function(event){
+      if(event.target===element)closePopup();
+    });
+    return;
+  }
+  if(command.indexOf('picker.click')===0){
+    element.removeAttribute(attribute);
+    element.addEventListener(eventName,function(){picker.click();});
+    return;
+  }
+  var name=(command.match(/^\s*([a-zA-Z_$][\w$]*)\s*\(/)||[])[1];
+  if(!name||!interactionAllowed(name))return;
+  element.removeAttribute(attribute);
+  element.addEventListener(eventName,function(event){
+    if(eventName==='submit')event.preventDefault();
+    var handler=interactionHandler(name);
+    if(handler)handler.apply(element,interactionArguments(command,event));
+  });
+}
 function bindInteractions(){
-  document.querySelectorAll('button[onclick]').forEach(function(button){
-    var command=button.getAttribute('onclick')||'';
-    button.removeAttribute('onclick');
-    var quoted=command.match(/'([^']*)'/);
-    var value=quoted?quoted[1]:'';
-    if(command.indexOf('go(')===0)button.addEventListener('click',function(){go(value);});
-    else if(command.indexOf('openAlbum(')===0)button.addEventListener('click',function(){openAlbum(value);});
-    else if(command.indexOf('setFolder(')===0)button.addEventListener('click',function(){setFolder(value);});
-    else if(command.indexOf('setPerson(')===0)button.addEventListener('click',function(){setPerson(value);});
-    else if(command.indexOf('openPopup(')===0)button.addEventListener('click',function(){openPopup(value);});
-    else if(command.indexOf('openDetail(')===0)button.addEventListener('click',function(){openDetail(value);});
-    else if(command.indexOf('openFriendCard(')===0)button.addEventListener('click',function(){openFriendCard(value);});
-    else if(command.indexOf('sendFriendRequest(')===0)button.addEventListener('click',function(){sendFriendRequest(value);});
-    else if(command.indexOf('approveFriendRequest(')===0)button.addEventListener('click',function(){approveFriendRequest(value);});
-    else if(command.indexOf('rejectFriendRequest(')===0)button.addEventListener('click',function(){rejectFriendRequest(value);});
-    else if(command.indexOf('approveAlbumInvite(')===0)button.addEventListener('click',function(){approveAlbumInvite(value);});
-    else if(command.indexOf('rejectAlbumInvite(')===0)button.addEventListener('click',function(){rejectAlbumInvite(value);});
-    else if(command.indexOf('deleteFolder(')===0)button.addEventListener('click',function(){deleteFolder(value);});
-    else if(command.indexOf('deleteCategory(')===0)button.addEventListener('click',function(){deleteCategory(value);});
-    else if(command.indexOf('selectCover(')===0)button.addEventListener('click',function(){selectCover(value);});
-    else if(command.indexOf('toggleCoverMenu')===0)button.addEventListener('click',toggleCoverMenu);
-    else if(command.indexOf('showCoverLibrary')===0)button.addEventListener('click',showCoverLibrary);
-    else if(command.indexOf('prevMedia')===0)button.addEventListener('click',prevMedia);
-    else if(command.indexOf('nextMedia')===0)button.addEventListener('click',nextMedia);
-    else if(command.indexOf('like(')===0)button.addEventListener('click',function(){like(value);});
-    else if(command.indexOf('downloadOriginal(')===0)button.addEventListener('click',function(){downloadOriginal(value);});
-    else if(command.indexOf('openReply(')===0)button.addEventListener('click',function(){openReply(value);});
-    else if(command.indexOf('invite(')===0)button.addEventListener('click',function(){invite(value);});
-    else if(command.indexOf('notify(')===0)button.addEventListener('click',function(){notify(value);});
-    else if(command.indexOf('closePopup')===0)button.addEventListener('click',closePopup);
-    else if(command.indexOf('closeDetail')===0)button.addEventListener('click',closeDetail);
-    else if(command.indexOf('copyId')===0)button.addEventListener('click',copyId);
-    else if(command.indexOf('logout')===0)button.addEventListener('click',logout);
-    else if(command.indexOf('approve')===0)button.addEventListener('click',approve);
-    else if(command.indexOf('picker.click')===0)button.addEventListener('click',function(){picker.click();});
+  document.querySelectorAll('[onclick]').forEach(function(element){
+    bindCommand(element,'onclick','click');
   });
   document.querySelectorAll('form[onsubmit]').forEach(function(form){
-    var command=form.getAttribute('onsubmit')||'';
-    form.removeAttribute('onsubmit');
-    var handlers={login:login,createFolder:createFolder,renameFolder:renameFolder,createAlbum:createAlbum,addFriend:addFriend,addPerson:addPerson,renameCategory:renameCategory,updateProfile:updateProfile,saveFriendCard:saveFriendCard,updateAlbum:updateAlbum,upload:upload,comment:comment,replyComment:replyComment};
-    var name=(command.match(/^([a-zA-Z]+)/)||[])[1];
-    var argument=(command.match(/'([^']*)'/)||[])[1];
-    if(handlers[name])form.addEventListener('submit',function(event){event.preventDefault();if(name==='comment'||name==='replyComment'||name==='renameFolder'||name==='renameCategory')handlers[name](event,argument);else handlers[name](event);});
+    bindCommand(form,'onsubmit','submit');
   });
   var avatarInput=document.querySelector('input[name="avatarFile"]');
   if(avatarInput)avatarInput.addEventListener('change',previewAvatar);
