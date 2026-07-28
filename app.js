@@ -177,6 +177,11 @@ function albumCard(a){
 }
 function albumView(){
   var a=album();
+  if(!a){
+    page='albums';
+    activePerson='全部';
+    return albumsView();
+  }
   var records=media.filter(function(m){return m.album===a.id&&(activePerson==='全部'||m.people.indexOf(activePerson)>-1);});
   var members=(a.members||[]).map(function(m,i){return albumMemberAv(a,i);}).join('');
   var tabs=a.categories.map(function(person){var count=person==='全部'?records.length:media.filter(function(m){return m.album===a.id&&m.people.indexOf(person)>-1;}).length;return '<button class="tab '+(person===activePerson?'active':'')+'" onclick="setPerson(\''+esc(person)+'\')">'+esc(person)+'<small>'+count+'</small></button>';}).join('');
@@ -194,7 +199,11 @@ function loginView(){
   return '<section class="phone login"><div class="login-card"><div class="login-symbol">旅</div><div class="eyebrow">START A NEW PAGE</div><h1>从一页旅程开始</h1><p class="login-note">旅页 ID 仅可使用数字和字母，创建后不可修改。已有 ID 将登录，新 ID 将创建账号。</p><form onsubmit="login(event)"><div class="field"><label>旅页 ID</label><input name="username" placeholder="仅限数字和字母" pattern="[A-Za-z0-9]+" title="仅可输入数字和字母" autocomplete="username" required maxlength="20"></div><div class="field"><label>密码</label><input name="password" type="password" placeholder="至少 6 位" autocomplete="current-password" required minlength="6"></div><button class="modal-submit">登录 / 创建账号</button></form><p class="subcopy" style="text-align:center;margin-top:16px;font-size:10px">同一旅页 ID 只能对应一个账号和一组密码</p></div>'+(toast?'<div class="toast login-toast" role="status">'+esc(toast)+'</div>':'')+'</section>';
 }
 function popupView(){
-  var a=album();
+  var currentAlbum=album();
+  if(!currentAlbum&&['upload','invite','person','settings'].indexOf(popup)!==-1){
+    return '<div class="modal-mask" onclick="if(event.target===this)closePopup()"><section class="sheet" onclick="event.stopPropagation()"><div class="sheet-head"><h2>暂无可操作的相簿</h2><button class="icon-btn" onclick="closePopup()">×</button></div><div class="empty">请先创建一个相簿，再进行这项操作。</div></section></div>';
+  }
+  var a=currentAlbum||{id:'',folder:'',categories:['全部'],title:'',description:''};
   var body='';
   var albumPhotos=media.filter(function(m){return m.album===a.id&&!m.video;});
   var coverChoices=albumPhotos.length?albumPhotos.map(function(m){return '<button type="button" class="cover-option '+(pendingCover===m.src?'selected':'')+'" onclick="selectCover(\''+m.id+'\')"><img src="'+m.src+'" alt="可选封面">'+(pendingCover===m.src?'<span>✓</span>':'')+'</button>';}).join(''):'<div class="cover-empty">相簿中还没有照片，上传后即可选择封面</div>';
@@ -298,12 +307,57 @@ function bindInteractions(){
   bindLongPressReorder();
 }
 function clearDragArtifacts(){if(activeDragCancel){var cancel=activeDragCancel;activeDragCancel=null;cancel();}document.querySelectorAll('.drag-ghost').forEach(function(item){item.remove();});document.body.classList.remove('is-sorting');}
-function render(){clearDragArtifacts();app.innerHTML=page==='login'?loginView():page==='albums'?albumsView():page==='album'?albumView():profileView();bindInteractions();}
+function render(){
+  clearDragArtifacts();
+  if(page==='album'&&!album()){page='albums';activePerson='全部';detail='';}
+  if(!album()&&['upload','invite','person','settings'].indexOf(popup)!==-1)popup='';
+  app.innerHTML=page==='login'?loginView():page==='albums'?albumsView():page==='album'?albumView():profileView();
+  bindInteractions();
+}
 function go(next){page=next;popup='';detail='';render();}
 function openAlbum(id){activeAlbum=id;activePerson='全部';go('album');}
 function setFolder(folder){state.folder=folder;save();render();}
 function setPerson(person){activePerson=person;render();}
-async function openPopup(name){if(name==='settings'){pendingCover=album().cover;coverMenuOpen=false;coverLibraryOpen=false;}if(name==='profile')pendingAvatar=state.user.avatarUrl;if(name==='friend')pendingFriendProfile=null;if(name==='messages'&&currentLoginId){if(cloudMode){popup=name;render();try{await loadCloudData();var unread=state.notifications.filter(function(item){return !item.read;}).map(function(item){return item.id;});if(unread.length)await LvyueCloud.rest('notifications','id='+cloudIn(unread),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({read_at:new Date().toISOString()})});state.notifications.forEach(function(item){item.read=true;});}catch(error){notify('消息同步失败，请稍后重试');}}else{var latest=storageGet('lvyue-user-'+currentLoginId);if(latest){state=JSON.parse(latest);state.friendRequests=state.friendRequests||[];state.albumInvites=state.albumInvites||[];state.notifications=state.notifications||[];state.notifications.forEach(function(item){item.read=true;});save();}}}popup=name;render();}
+async function openPopup(name){
+  if(['upload','invite','person','settings'].indexOf(name)!==-1&&!album()){
+    popup='';
+    notify('请先创建一个相簿');
+    return;
+  }
+  if(name==='settings'){
+    pendingCover=album().cover;
+    coverMenuOpen=false;
+    coverLibraryOpen=false;
+  }
+  if(name==='profile')pendingAvatar=state.user.avatarUrl;
+  if(name==='friend')pendingFriendProfile=null;
+  if(name==='messages'&&currentLoginId){
+    if(cloudMode){
+      popup=name;
+      render();
+      try{
+        await loadCloudData();
+        var unread=state.notifications.filter(function(item){return !item.read;}).map(function(item){return item.id;});
+        if(unread.length)await LvyueCloud.rest('notifications','id='+cloudIn(unread),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({read_at:new Date().toISOString()})});
+        state.notifications.forEach(function(item){item.read=true;});
+      }catch(error){
+        notify('消息同步失败，请稍后重试');
+      }
+    }else{
+      var latest=storageGet('lvyue-user-'+currentLoginId);
+      if(latest){
+        state=JSON.parse(latest);
+        state.friendRequests=state.friendRequests||[];
+        state.albumInvites=state.albumInvites||[];
+        state.notifications=state.notifications||[];
+        state.notifications.forEach(function(item){item.read=true;});
+        save();
+      }
+    }
+  }
+  popup=name;
+  render();
+}
 function closePopup(){popup='';render();}
 function openDetail(id){detail=id;render();}
 function closeDetail(){detail='';replyingComment='';render();}
