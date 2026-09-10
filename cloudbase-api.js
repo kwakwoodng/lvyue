@@ -97,6 +97,87 @@
     }
   }
   function logout() { saveSession(null); }
+  async function uploadPreparedFile(prepared, file) {
+    if (!prepared || !prepared.upload_url || !prepared.upload_intent_id || !prepared.object_key) {
+      throw apiError({
+        code: 'INVALID_UPLOAD_PREPARATION',
+        message: '云端未返回有效的上传地址，请重试'
+      });
+    }
+
+    if (!prepared.upload_token) {
+      throw apiError({
+        code: 'INVALID_UPLOAD_TOKEN',
+        message: '云端未返回有效的上传令牌，请重试'
+      });
+    }
+
+    var uploadUrl;
+    try {
+      uploadUrl = new URL(String(prepared.upload_url), window.location.href);
+      if (!uploadUrl.searchParams.has('token')) {
+        uploadUrl.searchParams.set('token', String(prepared.upload_token));
+      }
+    } catch (error) {
+      throw apiError({
+        code: 'INVALID_UPLOAD_URL',
+        message: '云端返回的上传地址无效，请重试'
+      });
+    }
+
+    var headers = {};
+    Object.keys(prepared.headers || {}).forEach(function (name) {
+      headers[name] = prepared.headers[name];
+    });
+    if (!headers['Content-Type'] && file.type) {
+      headers['Content-Type'] = file.type;
+    }
+
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timeoutId = controller ? setTimeout(function () {
+      controller.abort();
+    }, 120000) : null;
+
+    try {
+      var response = await fetch(uploadUrl.toString(), {
+        method: String(prepared.method || 'PUT').toUpperCase(),
+        headers: headers,
+        body: file,
+        mode: 'cors',
+        signal: controller ? controller.signal : undefined
+      });
+
+      if (!response.ok) {
+        var responseDetail = '';
+        try {
+          responseDetail = (await response.text()).slice(0, 200);
+        } catch (readError) {
+          responseDetail = '';
+        }
+        throw apiError({
+          code: 'UPLOAD_FAILED',
+          message: '文件上传失败（HTTP ' + response.status + '）' + (responseDetail ? '：' + responseDetail : '')
+        });
+      }
+    } catch (error) {
+      if (error && error.name === 'AbortError') {
+        throw apiError({
+          code: 'UPLOAD_TIMEOUT',
+          message: '文件上传超时，请检查网络后重试'
+        });
+      }
+      if (error && (error.code === 'UPLOAD_FAILED' || error.code === 'UPLOAD_TIMEOUT')) {
+        throw error;
+      }
+      var transportError = new Error('文件无法连接云存储，请检查网络后重试');
+      transportError.code = 'UPLOAD_NETWORK_ERROR';
+      transportError.cause = error;
+      throw transportError;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
+
   async function uploadFile(purpose, albumId, file, categoryIds, capturedAt) {
     var prepared = await call('storage.prepareUpload', {
       purpose: purpose,
@@ -105,9 +186,7 @@
       mime_type: file.type || 'application/octet-stream',
       byte_size: file.size
     });
-    var bucket = app.storage.from(prepared.bucket_id || 'lvyue-media');
-    var upload = await bucket.uploadToSignedUrl(prepared.object_key, prepared.upload_token, file);
-    if (upload && upload.error) throw apiError(upload.error);
+    await uploadPreparedFile(prepared, file);
     return call('storage.completeUpload', {
       upload_intent_id: prepared.upload_intent_id,
       object_key: prepared.object_key,
