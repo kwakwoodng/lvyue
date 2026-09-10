@@ -114,7 +114,20 @@
 
     var uploadUrl;
     try {
-      uploadUrl = new URL(String(prepared.upload_url), window.location.href);
+      var rawUploadUrl = String(prepared.upload_url);
+      if (/^https?:\/\//i.test(rawUploadUrl)) {
+        uploadUrl = new URL(rawUploadUrl);
+      } else {
+        var envId = String(window.__LVYUE_CLOUDBASE_ENV_ID__ || '').trim();
+        if (!envId || envId.indexOf('%VITE_') === 0) {
+          throw new Error('CloudBase environment ID is missing');
+        }
+        var uploadPath = rawUploadUrl.charAt(0) === '/' ? rawUploadUrl : '/' + rawUploadUrl;
+        if (uploadPath.indexOf('/object/') === 0) {
+          uploadPath = '/v1/storages' + uploadPath;
+        }
+        uploadUrl = new URL(uploadPath, 'https://' + envId + '.api.tcloudbasegateway.com');
+      }
       if (!uploadUrl.searchParams.has('token')) {
         uploadUrl.searchParams.set('token', String(prepared.upload_token));
       }
