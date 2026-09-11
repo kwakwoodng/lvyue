@@ -9,6 +9,8 @@
   var app = null;
   var initError = null;
   var storageKey = 'lvyue-cloudbase-session';
+  var signedUrlCache = {};
+  var signedUrlCacheLifetime = 45 * 60 * 1000;
 
   if (sdk && validKey && onlinePage) {
     try { app = sdk.init({ env: config.env, region: config.region || 'ap-shanghai', accessKey: key, timeout: 20000 }); }
@@ -97,6 +99,21 @@
     }
   }
   function logout() { saveSession(null); }
+  async function cachedSignedUrl(cacheKey, loader) {
+    var cached = signedUrlCache[cacheKey];
+    if (cached && cached.url && cached.expiresAt > Date.now()) return cached.url;
+    if (cached && cached.promise) return cached.promise;
+    var pending = Promise.resolve().then(loader).then(function (value) {
+      var url = cloudbaseGatewayUrl(value);
+      signedUrlCache[cacheKey] = { url: url, expiresAt: Date.now() + signedUrlCacheLifetime };
+      return url;
+    }).catch(function (error) {
+      delete signedUrlCache[cacheKey];
+      throw error;
+    });
+    signedUrlCache[cacheKey] = { promise: pending, expiresAt: 0 };
+    return pending;
+  }
   function cloudbaseGatewayUrl(value) {
     var rawUrl = String(value || '').trim();
     if (!rawUrl) return '';
@@ -209,13 +226,17 @@
     });
   }
   async function mediaUrl(mediaId) {
-    return cloudbaseGatewayUrl((await call('media.url', { media_id: mediaId })).url);
+    return cachedSignedUrl('media:' + mediaId, async function () {
+      return (await call('media.url', { media_id: mediaId })).url;
+    });
   }
   async function assetUrl(kind, id) {
     var data = { kind: kind };
     if (kind === 'cover') data.album_id = id;
     else data.user_id = id;
-    return cloudbaseGatewayUrl((await call('storage.assetUrl', data)).url);
+    return cachedSignedUrl(kind + ':' + id, async function () {
+      return (await call('storage.assetUrl', data)).url;
+    });
   }
   function filterValue(filter, key) {
     var match = String(filter || '').match(new RegExp('(?:^|&)' + key + '=eq\\.([^&]+)'));
