@@ -97,6 +97,20 @@
     }
   }
   function logout() { saveSession(null); }
+  function cloudbaseGatewayUrl(value) {
+    var rawUrl = String(value || '').trim();
+    if (!rawUrl) return '';
+    if (/^https?:\/\//i.test(rawUrl)) return new URL(rawUrl).toString();
+
+    var envId = String(window.__LVYUE_CLOUDBASE_ENV_ID__ || '').trim();
+    if (!envId || envId.indexOf('%VITE_') === 0) {
+      throw new Error('CloudBase environment ID is missing');
+    }
+    var path = rawUrl.charAt(0) === '/' ? rawUrl : '/' + rawUrl;
+    if (path.indexOf('/object/') === 0) path = '/v1/storages' + path;
+    return new URL(path, 'https://' + envId + '.api.tcloudbasegateway.com').toString();
+  }
+
   async function uploadPreparedFile(prepared, file) {
     if (!prepared || !prepared.upload_url || !prepared.upload_intent_id || !prepared.object_key) {
       throw apiError({
@@ -114,20 +128,7 @@
 
     var uploadUrl;
     try {
-      var rawUploadUrl = String(prepared.upload_url);
-      if (/^https?:\/\//i.test(rawUploadUrl)) {
-        uploadUrl = new URL(rawUploadUrl);
-      } else {
-        var envId = String(window.__LVYUE_CLOUDBASE_ENV_ID__ || '').trim();
-        if (!envId || envId.indexOf('%VITE_') === 0) {
-          throw new Error('CloudBase environment ID is missing');
-        }
-        var uploadPath = rawUploadUrl.charAt(0) === '/' ? rawUploadUrl : '/' + rawUploadUrl;
-        if (uploadPath.indexOf('/object/') === 0) {
-          uploadPath = '/v1/storages' + uploadPath;
-        }
-        uploadUrl = new URL(uploadPath, 'https://' + envId + '.api.tcloudbasegateway.com');
-      }
+      uploadUrl = new URL(cloudbaseGatewayUrl(prepared.upload_url));
       if (!uploadUrl.searchParams.has('token')) {
         uploadUrl.searchParams.set('token', String(prepared.upload_token));
       }
@@ -207,12 +208,14 @@
       captured_at: capturedAt || undefined
     });
   }
-  async function mediaUrl(mediaId) { return (await call('media.url', { media_id: mediaId })).url; }
+  async function mediaUrl(mediaId) {
+    return cloudbaseGatewayUrl((await call('media.url', { media_id: mediaId })).url);
+  }
   async function assetUrl(kind, id) {
     var data = { kind: kind };
     if (kind === 'cover') data.album_id = id;
     else data.user_id = id;
-    return (await call('storage.assetUrl', data)).url;
+    return cloudbaseGatewayUrl((await call('storage.assetUrl', data)).url);
   }
   function filterValue(filter, key) {
     var match = String(filter || '').match(new RegExp('(?:^|&)' + key + '=eq\\.([^&]+)'));
