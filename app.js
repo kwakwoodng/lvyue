@@ -114,6 +114,11 @@ async function hydrateCloudAvatars(profileMap){var profiles=profileMap||cloudPro
     function flattenReplies(parent){var result=[];rows.filter(function(item){return item.parent_id===parent.id;}).forEach(function(reply){result.push([reply.nickname,reply.body,parent.nickname,reply.travel_id,reply.id]);result=result.concat(flattenReplies(reply));});return result;}
     return rows.filter(function(item){return !item.parent_id;}).map(function(item){return [item.nickname,item.body,flattenReplies(item),item.travel_id,item.id];});
   }
+  function embeddedRows(value){
+    if(Array.isArray(value))return value;
+    if(typeof value==='string'){try{var parsed=JSON.parse(value);return Array.isArray(parsed)?parsed:null;}catch(error){return null;}}
+    return null;
+  }
   async function mapWithConcurrency(items,limit,worker){
     var source=Array.from(items||[]),results=new Array(source.length),cursor=0;
     async function run(){while(true){var index=cursor++;if(index>=source.length)return;results[index]=await worker(source[index],index);}}
@@ -142,7 +147,7 @@ async function hydrateCloudAvatars(profileMap){var profiles=profileMap||cloudPro
       (albumDetail.categories||[]).forEach(function(category){categoryMap[category.name]=category.id;});
       var mappedRows=await mapWithConcurrency(mediaRows,6,async function(row){
         var src=await LvyueCloud.mediaUrl(row.id).catch(function(){return '';});
-        var commentRows=Array.isArray(row.comments)?row.comments:null;
+        var commentRows=embeddedRows(row.comments);
         var mappedComments=commentRows===null?(previousComments[row.id]||[]):mapCloudComments(commentRows);
         return {profiles:commentRows,item:{id:row.id,album:row.album_id,src:src,storagePath:row.storage_path,people:(row.categories||[]).map(function(category){return category.name;}),by:row.uploader_nickname,byId:row.uploader_travel_id,uploaderUserId:row.uploader_id,date:row.captured_at||new Date(row.created_at).toLocaleDateString('zh-CN'),likes:Number(row.like_count||0),liked:Boolean(row.liked),shape:'medium',comments:mappedComments,video:row.media_type==='video',originalName:row.original_name,mimeType:row.mime_type,byteSize:row.byte_size}};
       });

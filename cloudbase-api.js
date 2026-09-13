@@ -41,6 +41,7 @@
         headers: { 'content-type': 'application/json' },
         credentials: endpoint.charAt(0) === '/' ? 'same-origin' : 'omit',
         body: payload,
+        keepalive: payload.length < 60000,
         signal: controller && controller.signal
       });
     } finally {
