@@ -148,6 +148,13 @@ async function hydrateCloudAvatars(profileMap){var profiles=profileMap||cloudPro
       var mappedRows=await mapWithConcurrency(mediaRows,6,async function(row){
         var src=await LvyueCloud.mediaUrl(row.id).catch(function(){return '';});
         var commentRows=embeddedRows(row.comments);
+        // Compatibility for an older deployed cloud function. The current
+        // media.list embeds comments, but a stale function returns no comments
+        // property at all. Fall back only in that case so current deployments
+        // keep the single-request path.
+        if(commentRows===null&&!Object.prototype.hasOwnProperty.call(row,'comments')){
+          commentRows=await LvyueCloud.call('comments.list',{media_id:row.id}).catch(function(error){console.warn('legacy comment sync failed',row.id,error);return null;});
+        }
         var mappedComments=commentRows===null?(previousComments[row.id]||[]):mapCloudComments(commentRows);
         return {profiles:commentRows,item:{id:row.id,album:row.album_id,src:src,storagePath:row.storage_path,people:(row.categories||[]).map(function(category){return category.name;}),by:row.uploader_nickname,byId:row.uploader_travel_id,uploaderUserId:row.uploader_id,date:row.captured_at||new Date(row.created_at).toLocaleDateString('zh-CN'),likes:Number(row.like_count||0),liked:Boolean(row.liked),shape:'medium',comments:mappedComments,video:row.media_type==='video',originalName:row.original_name,mimeType:row.mime_type,byteSize:row.byte_size}};
       });
