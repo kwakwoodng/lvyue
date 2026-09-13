@@ -128,6 +128,7 @@ async function hydrateCloudAvatars(profileMap){var profiles=profileMap||cloudPro
     return cloudRefreshPromise;
   }
   async function loadCloudData(){
+    var previousComments={};media.forEach(function(item){previousComments[item.id]=item.comments||[];});
     var basics=await Promise.all(['auth.me','friends.list','friends.requests','folders.list','albums.list','notifications.list','albums.invites'].map(function(action){return LvyueCloud.call(action,action==='notifications.list'?{limit:100}:{});}));
     var own=basics[0],friends=basics[1]||[],requests=basics[2]||[],folders=basics[3]||[],albumRows=basics[4]||[],notices=basics[5]||[],invites=basics[6]||[];
     if(!own)throw new Error('用户资料尚未创建');
@@ -145,9 +146,9 @@ async function hydrateCloudAvatars(profileMap){var profiles=profileMap||cloudPro
       var mappedRows=await mapWithConcurrency(mediaRows,6,async function(row){
         var pair=await Promise.all([
           LvyueCloud.mediaUrl(row.id).catch(function(){return '';}),
-          LvyueCloud.call('comments.list',{media_id:row.id})
-        ]),src=pair[0],commentRows=pair[1]||[];
-        var mappedComments=mapCloudComments(commentRows);
+          LvyueCloud.call('comments.list',{media_id:row.id}).catch(function(error){console.warn('comment sync failed',row.id,error);return null;})
+        ]),src=pair[0],commentRows=pair[1];
+        var mappedComments=commentRows===null?(previousComments[row.id]||[]):mapCloudComments(commentRows);
         return {profiles:commentRows,item:{id:row.id,album:row.album_id,src:src,storagePath:row.storage_path,people:(row.categories||[]).map(function(category){return category.name;}),by:row.uploader_nickname,byId:row.uploader_travel_id,uploaderUserId:row.uploader_id,date:row.captured_at||new Date(row.created_at).toLocaleDateString('zh-CN'),likes:Number(row.like_count||0),liked:Boolean(row.liked),shape:'medium',comments:mappedComments,video:row.media_type==='video',originalName:row.original_name,mimeType:row.mime_type,byteSize:row.byte_size}};
       });
       var coverMedia=mediaRows.find(function(item){return item.storage_path===albumRow.cover_path;}),coverItem=coverMedia&&mappedRows.map(function(item){return item.item;}).find(function(item){return item.id===coverMedia.id;}),coverUrl=coverItem&&coverItem.src||'';

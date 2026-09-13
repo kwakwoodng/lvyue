@@ -581,16 +581,14 @@ async function toggleLike(user, data) {
 }
 
 async function listComments(user, data) {
-  const media = (await query('select album_id from media where id=$1', [id(data.media_id)])).rows[0];
+  const mediaId = id(data.media_id);
+  const media = (await query('select album_id from media where id=$1', [mediaId])).rows[0];
   assert(media, 404, 'MEDIA_NOT_FOUND', '照片或视频不存在');
   await activeMember(user.id, media.album_id);
   return (await query(
-    `with recursive tree as (
-       select c.*,0 depth,array[c.created_at] path from comments c where c.media_id=$1 and c.parent_id is null
-       union all
-       select c,t.depth+1,t.path||c.created_at from comments c join tree t on c.parent_id=t.id
-     )
-     select t.*,u.travel_id,u.nickname,u.avatar_path from tree t join app_users u on u.id=t.user_id order by path`, [data.media_id]
+    `select c.*,u.travel_id,u.nickname,u.avatar_path
+       from comments c join app_users u on u.id=c.user_id
+      where c.media_id=$1 order by c.created_at,c.id`, [mediaId]
   )).rows;
 }
 
