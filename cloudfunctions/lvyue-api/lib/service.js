@@ -514,7 +514,12 @@ async function listMedia(user, data) {
        (select count(*)::int from media_likes ml where ml.media_id=m.id) like_count,
        exists(select 1 from media_likes ml where ml.media_id=m.id and ml.user_id=$2) liked,
        coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'name',c.name) order by c.position)
-          from media_categories mc join album_categories c on c.id=mc.category_id where mc.media_id=m.id),'[]'::jsonb) categories
+          from media_categories mc join album_categories c on c.id=mc.category_id where mc.media_id=m.id),'[]'::jsonb) categories,
+       coalesce((select jsonb_agg(jsonb_build_object(
+          'id',cm.id,'parent_id',cm.parent_id,'body',cm.body,'created_at',cm.created_at,
+          'user_id',cm.user_id,'travel_id',cu.travel_id,'nickname',cu.nickname,'avatar_path',cu.avatar_path
+        ) order by cm.created_at,cm.id)
+          from comments cm join app_users cu on cu.id=cm.user_id where cm.media_id=m.id),'[]'::jsonb) comments
      from media m join app_users u on u.id=m.uploader_id where m.album_id=$1 order by m.created_at desc`, [albumId, user.id]
   );
   return mediaResult.rows;

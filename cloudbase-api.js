@@ -11,6 +11,7 @@
   var storageKey = 'lvyue-cloudbase-session';
   var signedUrlCache = {};
   var signedUrlCacheLifetime = 45 * 60 * 1000;
+  var directEndpointUnavailableUntil = 0;
 
   if (sdk && validKey && onlinePage) {
     try { app = sdk.init({ env: config.env, region: config.region || 'ap-shanghai', accessKey: key, timeout: 20000 }); }
@@ -30,25 +31,20 @@
     error.details = detail.details;
     return error;
   }
-  async function callHttp(action, data, options) {
-    var current = storedSession();
+  async function fetchHttpEndpoint(endpoint, payload, timeoutMs) {
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = controller && timeoutMs ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
     var response;
     try {
-      response = await fetch(config.httpEndpoint, {
+      response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({
-          action: action,
-          data: data || {},
-          token: options && options.public ? undefined : current && current.token
-        })
+        credentials: endpoint.charAt(0) === '/' ? 'same-origin' : 'omit',
+        body: payload,
+        signal: controller && controller.signal
       });
-    } catch (cause) {
-      var transportError = new Error('云端连接失败，请刷新页面后重试');
-      transportError.code = 'NETWORK_ERROR';
-      transportError.cause = cause;
-      throw transportError;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
     var text = await response.text();
     var result;
@@ -60,6 +56,32 @@
     }
     if (!response.ok || !result || result.ok !== true) throw apiError(result);
     return result.data;
+  }
+  async function callHttp(action, data, options) {
+    var current = storedSession();
+    var payload = JSON.stringify({
+      action: action,
+      data: data || {},
+      token: options && options.public ? undefined : current && current.token
+    });
+    var hasFallback = Boolean(config.fallbackHttpEndpoint);
+    if (hasFallback && Date.now() < directEndpointUnavailableUntil) {
+      return fetchHttpEndpoint(config.fallbackHttpEndpoint, payload, 25000);
+    }
+    try {
+      return await fetchHttpEndpoint(config.httpEndpoint, payload, hasFallback ? 4000 : 25000);
+    } catch (cause) {
+      if (hasFallback && cause && (cause.name === 'TypeError' || cause.name === 'AbortError' || cause.code === 'NETWORK_ERROR')) {
+        directEndpointUnavailableUntil = Date.now() + 5 * 60 * 1000;
+        try { return await fetchHttpEndpoint(config.fallbackHttpEndpoint, payload, 25000); }
+        catch (fallbackCause) { cause = fallbackCause; }
+      }
+      if (cause && cause.code && cause.code !== 'NETWORK_ERROR') throw cause;
+      var transportError = new Error('云端连接失败，请刷新页面后重试');
+      transportError.code = 'NETWORK_ERROR';
+      transportError.cause = cause;
+      throw transportError;
+    }
   }
   async function call(action, data, options) {
     if (config.httpEndpoint) return callHttp(action, data, options);

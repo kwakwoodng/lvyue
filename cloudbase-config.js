@@ -10,10 +10,10 @@
     env: runtimeValue(window.__LVYUE_CLOUDBASE_ENV_ID__) || 'lvyue-d6gyatb4a502c0235',
     region: runtimeValue(window.__LVYUE_CLOUDBASE_REGION__) || 'ap-shanghai',
     functionName: 'lvyue-api',
-    // Browser requests stay on the Vercel origin. The server-side proxy
-    // forwards them to CloudBase, avoiding browser CORS and Web SDK authority
-    // checks while the cloud function still enforces app authentication.
-    httpEndpoint: '/api/lvyue',
+    // Prefer the regional CloudBase gateway. If the browser cannot reach it,
+    // cloudbase-api.js transparently falls back to the same-origin proxy.
+    httpEndpoint: 'https://lvyue-d6gyatb4a502c0235-1329666616.ap-shanghai.app.tcloudbase.com/lvyue-api',
+    fallbackHttpEndpoint: '/api/lvyue',
     // 部署时由构建环境注入 Publishable Key；不要在这里放 SecretId/SecretKey。
     accessKey: runtimeKey || 'VITE_CLOUDBASE_ACCESS_KEY'
   });
