@@ -348,6 +348,7 @@ async function reviewAlbumMember(user, data) {
 async function listAlbumInvites(user) {
   const result = await query(
     `select am.id,am.album_id,am.status,am.created_at,a.title,a.description,
+            (am.invited_by=a.creator_id) as direct_join,
             u.id as inviter_id,u.travel_id as inviter_travel_id,u.nickname as inviter_nickname,u.avatar_path as inviter_avatar_path
        from album_members am join albums a on a.id=am.album_id left join app_users u on u.id=am.invited_by
       where am.user_id=$1 and am.status='invited' order by am.created_at desc`, [user.id]
