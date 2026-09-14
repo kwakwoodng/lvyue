@@ -259,7 +259,19 @@ async function updateAlbum(user, data) {
 async function deleteAlbum(user, data) {
   const albumId = id(data.album_id);
   await ownerMember(user.id, albumId);
+  const [album, mediaRows] = await Promise.all([
+    query('select cover_path from albums where id=$1', [albumId]),
+    query('select storage_path from media where album_id=$1', [albumId])
+  ]);
+  const objectKeys = [...new Set([
+    album.rows[0] && album.rows[0].cover_path,
+    ...mediaRows.rows.map(item => item.storage_path)
+  ].filter(Boolean))];
   await query('delete from albums where id=$1', [albumId]);
+  await Promise.all(objectKeys.map(async objectKey => {
+    try { await storage.deleteObject(objectKey); }
+    catch (error) { console.error('album storage delete failed', objectKey, error); }
+  }));
   return { success: true };
 }
 
@@ -560,7 +572,10 @@ async function deleteMedia(user, data) {
   assert(media, 404, 'MEDIA_NOT_FOUND', '照片或视频不存在');
   const member = await activeMember(user.id, media.album_id);
   assert(media.uploader_id === user.id || member.role === 'owner', 403, 'MEDIA_DELETE_DENIED', '只有上传者或相簿创建者可以删除');
-  await query('delete from media where id=$1', [media.id]);
+  await transaction(async client => {
+    await query('update albums set cover_path=null,updated_at=now() where id=$1 and cover_path=$2', [media.album_id, media.storage_path], client);
+    await query('delete from media where id=$1', [media.id], client);
+  });
   try { await storage.deleteObject(media.storage_path); } catch (error) { console.error('storage delete failed', error); }
   return { success: true };
 }
