@@ -307,7 +307,7 @@
       create_album: ['albums.create', { title: params.album_title, description: params.album_description }],
       send_friend_request: ['friends.request', { travel_id: params.target_travel_id }],
       respond_friend_request: ['friends.respond', { request_id: params.request_id, accept: params.accept_request }],
-      invite_album_member: ['albums.invite', { album_id: params.target_album, user_id: params.target_user }],
+      invite_album_member: ['albums.invite', { album_id: params.target_album, user_id: params.target_user, travel_id: params.target_travel_id }],
       respond_album_invite: ['albums.invite.respond', { membership_id: params.membership_id, accept: params.accept_invite }]
     };
     var mapped = map[name];

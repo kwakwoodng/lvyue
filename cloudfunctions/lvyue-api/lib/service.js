@@ -277,7 +277,16 @@ async function deleteAlbum(user, data) {
 
 async function inviteAlbumMember(user, data) {
   const albumId = id(data.album_id);
-  const targetId = id(data.user_id);
+  let targetId = id(data.user_id);
+  if (!targetId) {
+    const travelId = auth.normalizeTravelId(data.travel_id);
+    const target = (await query(
+      'select id from app_users where travel_id=$1 and disabled_at is null', [travelId]
+    )).rows[0];
+    assert(target, 404, 'USER_NOT_FOUND', '没有找到要邀请的好友账号');
+    targetId = target.id;
+  }
+  assert(targetId !== user.id, 400, 'CANNOT_INVITE_SELF', '不能邀请自己加入相簿');
   const inviter = await activeMember(user.id, albumId);
   assert(await areFriends(user.id, targetId), 403, 'NOT_FRIENDS', '只能邀请好友加入相簿');
   return transaction(async client => {
